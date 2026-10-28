@@ -127,9 +127,15 @@ export async function loadGame({ slate, game, onProgress } = {}) {
 
   const profiles = new Map();
   teamIds.forEach((id, i) => {
+    // Some feeds ignore the season parameter, in which case the "prior" payload is just this
+    // season again. Showing that as last year's pace would be a lie, so it is dropped and the
+    // baseline falls back to the current season instead.
+    const repeatsCurrent =
+      teamStatsPrior[i] &&
+      JSON.stringify(teamStatsPrior[i]) === JSON.stringify(teamStatsNow[i]);
     profiles.set(id, {
       ...profileFrom(teamStatsNow[i], schedules[i], NBA_SEASON, id),
-      prior: profileFrom(teamStatsPrior[i], null, NBA_PRIOR, id),
+      prior: repeatsCurrent ? null : profileFrom(teamStatsPrior[i], null, NBA_PRIOR, id),
       form: formFrom(schedules[i], id),
     });
   });
@@ -216,7 +222,11 @@ async function fetchLogs(players, season, step, label) {
 
 function statMap(raw) {
   const out = new Map();
-  for (const category of raw?.splits?.categories || [])
+  // ESPN serves team statistics in two shapes: the core API nests them under splits,
+  // the site API under results.stats. Edge hosts can only reach the site API, so both
+  // are read here and the rest of the model never has to care which one it got.
+  const categories = raw?.splits?.categories || raw?.results?.stats?.categories || [];
+  for (const category of categories)
     for (const s of category.stats || []) out.set(s.name, num(s.value));
   return out;
 }
@@ -225,18 +235,34 @@ function profileFrom(raw, schedule, season, teamId) {
   const s = statMap(raw);
   const g = (k) => s.get(k) ?? null;
   const form = schedule ? formFrom(schedule, teamId) : null;
+
+  // The site API omits pace, turnover ratio and offensive rebound rate. They are all
+  // recoverable from the box-score averages it does publish, using the standard
+  // possession estimate: FGA + 0.44*FTA - OREB + TOV.
+  const fga = g('avgFieldGoalsAttempted');
+  const fgm = g('avgFieldGoalsMade');
+  const fta = g('avgFreeThrowsAttempted');
+  const oreb = g('avgOffensiveRebounds');
+  const tov = g('avgTurnovers');
+  const possessions =
+    Number.isFinite(fga) && Number.isFinite(tov)
+      ? fga + 0.44 * (fta ?? 0) - (oreb ?? 0) + tov
+      : null;
+
   return {
     teamId,
     season,
     games: g('gamesPlayed'),
-    pace: g('avgEstimatedPossessions') ?? g('paceFactor'),
+    pace: g('avgEstimatedPossessions') ?? g('paceFactor') ?? possessions,
     pointsPerGame: g('avgPoints'),
     oppPointsPerGame: form?.oppPointsPerGame ?? null,
     assistsPerGame: g('avgAssists'),
     reboundsPerGame: g('avgRebounds'),
-    offReboundRate: g('offReboundRate'),
+    offReboundRate:
+      g('offReboundRate') ??
+      (Number.isFinite(fga) && Number.isFinite(fgm) && fga > fgm ? oreb / (fga - fgm) : null),
     defReboundRate: g('defReboundRate'),
-    turnoverRatio: g('turnoverRatio'),
+    turnoverRatio: g('turnoverRatio') ?? (possessions ? tov / possessions : null),
     threePct: g('threePointPct'),
     threeAttemptRate: (g('avgThreePointFieldGoalsAttempted') && g('avgFieldGoalsAttempted'))
       ? g('avgThreePointFieldGoalsAttempted') / g('avgFieldGoalsAttempted')

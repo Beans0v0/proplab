@@ -331,7 +331,7 @@ function injuryRowsFor(teams) {
 
 function notesFor({ game, env, settings, props, baseline }) {
   const notes = [
-    { kind: 'source', text: 'ESPN public NBA feeds (scoreboard, rosters, team schedule, team and player statistics, injury report), proxied by Server.java and cached on disk. No API key.' },
+    { kind: 'source', text: 'ESPN public NBA feeds (scoreboard, rosters, team schedule, team and player statistics, injury report), fetched through the app\'s data proxy and cached. No API key.' },
     { kind: 'seasons', text: `Current season is ${seasonLabel(NBA_SEASON)} — only a few games old — so last season (${seasonLabel(NBA_PRIOR)}) carries the prior for minutes and rates.` },
     { kind: 'baseline', text: 'Pace, scoring, rebounding and turnover baselines are this matchup\'s two teams, used as ratios rather than as league averages.' },
     { kind: 'market', text: `Lines come from the market: ${env.market || 'no posted total available'}.` },

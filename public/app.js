@@ -458,7 +458,7 @@ function renderFatal(err) {
       <div class="errbox">
         <strong>Could not build the board.</strong>
         <p style="margin:8px 0 0">${esc(err?.message || err)}</p>
-        <p style="margin:8px 0 0">Check that the local server is running (<code>java Server.java</code>) and that the data cache in <code>.cache/</code> was populated.</p>
+        <p style="margin:8px 0 0">Running it locally? Make sure the server is up (<code>java Server.java</code>). If it is hosted, the upstream data feed refused the request — reload in a minute.</p>
       </div>
     </div>`;
 }

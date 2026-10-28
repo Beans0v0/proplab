@@ -13,6 +13,9 @@ That is the whole install. No Node, no Python, no package manager, no API key, n
 account. The only requirement is a JDK (built and tested on JDK 25). `Server.java`
 serves the static site and proxies nflverse open data into `.cache/` on first run.
 
+There is also a hosted copy, no install required:
+**https://site-a797a758dcfe4e238a1db2b7157ee16d.freebuff.page**
+
 ## Why Java
 
 The machine this was built on had no Node, no Python, no Bun, no Go, no Ruby — only a
@@ -24,7 +27,9 @@ edit a file, reload the page.
 
 | Path | What it is |
 | --- | --- |
-| `Server.java` | Static file host + whitelisted, disk-cached proxy for nflverse datasets |
+| `Server.java` | Static file host + whitelisted, disk-cached proxy for nflverse datasets (local use) |
+| `worker/index.js` | The same two proxy routes as a Cloudflare Worker — edge cache instead of `.cache/` |
+| `sites.manifest.json` | Deploy manifest for the hosted build (worker + `public/` as static assets) |
 | `public/index.html` | Page shell |
 | `public/styles.css` | Styling |
 | `public/app.js` | UI: slate picker, prop board, matchup view, method, backtest runner |
@@ -41,6 +46,31 @@ edit a file, reload the page.
 | `public/engine/nba/sim.js` | NBA Monte Carlo: shared pace and script, minutes uncertainty, box-score decomposition |
 | `public/engine/nba/markets.js` | NBA markets, families and plain-language phrasing |
 | `public/engine/nba/board.js` | Assembles an NBA board into the same prop shape the UI renders |
+
+## The hosted build
+
+`worker/index.js` is a port of the two routes in `Server.java`: the same key allowlist,
+the same URL construction from digits only, the same TTLs. The only difference is that
+Cloudflare's edge cache replaces the `.cache/` directory, and responses are streamed
+through rather than buffered, so a 5 MB CSV never has to fit in memory.
+
+Two ESPN hosts — `sports.core.api.espn.com` and `site.web.api.espn.com` — answer **403 to
+Cloudflare's egress** while answering 200 to a home connection. The hosted build therefore
+reads everything from `site.api.espn.com`, where game logs and the injury feed are
+byte-identical, and compensates for the two things that host does differently:
+
+- **Team statistics arrive in another shape and with no season filter.** Both shapes are
+  parsed. Pace, turnover ratio and offensive rebound rate are derived from the published
+  box-score averages using the standard possession estimate
+  (`FGA + 0.44·FTA − OREB + TOV`).
+- **A prior-season team statistics call returns the current season.** That is detected by
+  comparing the two payloads and the prior profile is dropped, so the baseline falls back to
+  the current season instead of last year's numbers being silently mislabelled. Per-player
+  prior-season logs come from the game-log endpoint and are unaffected.
+
+The local `java Server.java` build still talks to the core API, so it gets ESPN's own pace
+figure and a real prior-season team profile. Pace can differ in the second decimal between
+the two builds; nothing else does.
 
 ## Reading the board
 
