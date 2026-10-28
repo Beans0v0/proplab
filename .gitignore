@@ -1,0 +1,6 @@
+# nflverse CSVs cached by Server.java on first run (~15 MB)
+.cache/
+
+# scratch
+.scratch/
+*.class
